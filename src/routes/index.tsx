@@ -13,9 +13,7 @@ function PatrioticHome() {
       <nav className="border-b border-slate-200 px-4 sm:px-8">
         <div className="max-w-7xl mx-auto h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-900 rounded flex items-center justify-center">
-              <Star className="w-5 h-5 text-white fill-white" />
-            </div>
+            <img src="/logo5.png" alt="OmniBid logo" className="h-14 w-14 object-contain" />
             <div>
               <span className="font-extrabold text-xl tracking-tight text-blue-900">OmniBid</span>
               <span className="hidden sm:inline text-[10px] uppercase tracking-widest text-slate-400 ml-2">Federal Proposal Platform</span>

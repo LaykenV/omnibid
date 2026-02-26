@@ -29,6 +29,11 @@ export const Route = createRootRouteWithContext<{
         rel: 'stylesheet',
         href: appCss,
       },
+      {
+        rel: 'icon',
+        href: '/logo5.png',
+        type: 'image/png',
+      },
     ],
   }),
   component: RootComponent,
