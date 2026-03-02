@@ -1,29 +1,14 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { useState } from 'react'
 import { Star, Upload, Link2, Hash, ArrowRight, ArrowLeft } from 'lucide-react'
-import { api } from '../../../convex/_generated/api'
-import type { Id } from '../../../convex/_generated/dataModel'
-import { getSessionId } from '../../lib/session'
-import { cn } from '../../lib/utils'
+import { api } from '../../../../convex/_generated/api'
+import type { Id } from '../../../../convex/_generated/dataModel'
+import { cn } from '../../../lib/utils'
 
 type InputType = 'sam_url' | 'solicitation_num' | 'pdf_upload'
 
-export const Route = createFileRoute('/proposals/new')({
-  component: NewProposalPage,
-  errorComponent: ({ error }) => (
-    <div className="mx-auto max-w-3xl px-4 sm:px-8 py-12">
-      <div className="border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-        Page failed to render: {error.message}
-      </div>
-    </div>
-  ),
-  head: () => ({
-    meta: [{ title: 'OmniBid | New Proposal' }],
-  }),
-})
-
-function NewProposalPage() {
+export function NewProposalPage() {
   const navigate = useNavigate()
   const createProposal = useMutation(api.proposals.create)
   const generateUploadUrl = useMutation(api.proposals.generateUploadUrl)
@@ -61,7 +46,7 @@ function NewProposalPage() {
           throw new Error('Only PDF and DOCX files are supported for MVP.')
         }
 
-        const uploadUrl = await generateUploadUrl({ sessionId: getSessionId() })
+        const uploadUrl = await generateUploadUrl({})
         const uploadResponse = await fetch(uploadUrl, {
           method: 'POST',
           headers: { 'Content-Type': selectedFile.type || 'application/octet-stream' },
@@ -83,7 +68,6 @@ function NewProposalPage() {
       }
 
       const proposalId = await createProposal({
-        sessionId: getSessionId(),
         inputType,
         inputValue: submissionValue,
         rfpFileIds,
@@ -108,7 +92,6 @@ function NewProposalPage() {
 
   return (
     <>
-      {/* Page header */}
       <section className="bg-blue-900 text-white relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none opacity-5">
           <div className="grid grid-cols-12 gap-8 p-8">
@@ -144,10 +127,8 @@ function NewProposalPage() {
         </div>
       </section>
 
-      {/* Form */}
       <section className="max-w-3xl mx-auto px-4 sm:px-8 py-8 sm:py-12">
         <form onSubmit={onSubmit} className="space-y-8">
-          {/* Input type selector */}
           <div>
             <label className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 block">Input Method</label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -186,7 +167,6 @@ function NewProposalPage() {
             </div>
           </div>
 
-          {/* Input field */}
           <div>
             <label className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 block">
               {inputType === 'sam_url' ? 'SAM.gov URL' : inputType === 'solicitation_num' ? 'Solicitation Number' : 'RFP Document'}

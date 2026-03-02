@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.33",
+    "@clerk/tanstack-react-start": "^0.29.8",
     "@convex-dev/react-query": "^0.1.0",
     "@convex-dev/workflow": "^0.3.4",
     "@radix-ui/react-slot": "^1.2.4",

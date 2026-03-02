@@ -3,7 +3,7 @@ import { v } from 'convex/values'
 
 export default defineSchema({
   proposals: defineTable({
-    sessionId: v.string(),
+    ownerId: v.string(),
     title: v.string(),
     status: v.union(
       v.literal('created'),
@@ -57,7 +57,7 @@ export default defineSchema({
     workflowId: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
   })
-    .index('by_session', ['sessionId'])
+    .index('by_owner', ['ownerId'])
     .index('by_status', ['status']),
 
   rfpDocuments: defineTable({

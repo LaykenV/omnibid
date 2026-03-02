@@ -1,50 +1,24 @@
 import { convexQuery } from '@convex-dev/react-query'
-import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { Link } from '@tanstack/react-router'
+import { useMemo } from 'react'
+import { useConvex } from 'convex/react'
 import { Star, FileCheck, ArrowRight, Plus } from 'lucide-react'
-import { api } from '../../../convex/_generated/api'
-import type { Doc } from '../../../convex/_generated/dataModel'
-import { getSessionId } from '../../lib/session'
-import { cn } from '../../lib/utils'
+import { api } from '../../../../convex/_generated/api'
+import type { Doc } from '../../../../convex/_generated/dataModel'
+import { useRoutePrewarmIntent } from '../../../lib/useRoutePrewarmIntent'
+import { cn } from '../../../lib/utils'
+import { prewarmProposalDetail } from './-proposalDetail.data'
 
-export const Route = createFileRoute('/proposals/')({
-  component: ProposalsListPage,
-  errorComponent: ({ error }) => (
-    <div className="mx-auto max-w-5xl px-4 sm:px-8 py-12">
-      <div className="border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-        Failed to load proposals: {error.message}
-      </div>
-    </div>
-  ),
-  head: () => ({
-    meta: [{ title: 'OmniBid | Proposals' }],
-  }),
-})
+export function ProposalsListPage() {
+  const queryOptions = useMemo(() => convexQuery(api.proposals.list, {}), [])
 
-function ProposalsListPage() {
-  const [sessionId, setSessionId] = useState('')
-
-  useEffect(() => {
-    setSessionId(getSessionId())
-  }, [])
-
-  const queryOptions = useMemo(
-    () => convexQuery(api.proposals.list, { sessionId }),
-    [sessionId],
-  )
-
-  const proposalsQuery = useQuery({
-    ...queryOptions,
-    enabled: Boolean(sessionId),
-  })
+  const proposalsQuery = useQuery(queryOptions)
   const proposals = proposalsQuery.data ?? []
 
   return (
     <>
-      {/* Page header */}
       <section className="bg-blue-900 text-white relative overflow-hidden">
-        {/* Stars pattern */}
         <div className="absolute inset-0 pointer-events-none opacity-5">
           <div className="grid grid-cols-12 gap-8 p-8">
             {Array.from({ length: 24 }).map((_, i) => (
@@ -79,7 +53,6 @@ function ProposalsListPage() {
           </div>
         </div>
 
-        {/* Tricolor bottom border */}
         <div className="flex h-1.5">
           <div className="flex-1 bg-red-700" />
           <div className="flex-1 bg-white" />
@@ -87,9 +60,8 @@ function ProposalsListPage() {
         </div>
       </section>
 
-      {/* Content */}
       <section className="max-w-7xl mx-auto px-4 sm:px-8 py-8 sm:py-12">
-        {!sessionId || proposalsQuery.isLoading ? (
+        {proposalsQuery.isLoading ? (
           <ListSkeleton />
         ) : proposalsQuery.isError ? (
           <div className="border border-red-200 bg-red-50 p-5 text-sm text-red-700">
@@ -98,33 +70,7 @@ function ProposalsListPage() {
         ) : proposals.length ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {proposals.map((proposal) => (
-              <Link
-                key={proposal._id}
-                to="/proposals/$proposalId"
-                params={{ proposalId: proposal._id }}
-                className="group block border border-slate-200 bg-white p-5 transition-all hover:border-blue-300 hover:shadow-md"
-              >
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="w-9 h-9 bg-blue-900 text-white flex items-center justify-center shrink-0 group-hover:bg-red-700 transition-colors">
-                    <FileCheck className="w-4 h-4" />
-                  </div>
-                  <StatusBadge status={proposal.status} />
-                </div>
-
-                <h2 className="font-bold text-blue-900 mb-1 line-clamp-2">{proposal.title}</h2>
-                {proposal.solicitation?.agency ? (
-                  <p className="text-sm text-slate-500 truncate">{proposal.solicitation.agency}</p>
-                ) : null}
-
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-xs text-slate-400 font-semibold uppercase tracking-wide">
-                    {proposal.requirementCount != null
-                      ? `${proposal.requirementCount} requirement${proposal.requirementCount === 1 ? '' : 's'}`
-                      : 'Pending extraction'}
-                  </span>
-                  <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-blue-900 transition-colors" />
-                </div>
-              </Link>
+              <ProposalCard key={proposal._id} proposal={proposal} />
             ))}
           </div>
         ) : (
@@ -147,6 +93,44 @@ function ProposalsListPage() {
         )}
       </section>
     </>
+  )
+}
+
+function ProposalCard({ proposal }: { proposal: Doc<'proposals'> }) {
+  const convex = useConvex()
+  const prewarmHandlers = useRoutePrewarmIntent(() => {
+    prewarmProposalDetail(convex, proposal._id)
+  })
+
+  return (
+    <Link
+      to="/proposals/$proposalId"
+      params={{ proposalId: proposal._id }}
+      preload="intent"
+      {...prewarmHandlers}
+      className="group block border border-slate-200 bg-white p-5 transition-all hover:border-blue-300 hover:shadow-md"
+    >
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="w-9 h-9 bg-blue-900 text-white flex items-center justify-center shrink-0 group-hover:bg-red-700 transition-colors">
+          <FileCheck className="w-4 h-4" />
+        </div>
+        <StatusBadge status={proposal.status} />
+      </div>
+
+      <h2 className="font-bold text-blue-900 mb-1 line-clamp-2">{proposal.title}</h2>
+      {proposal.solicitation?.agency ? (
+        <p className="text-sm text-slate-500 truncate">{proposal.solicitation.agency}</p>
+      ) : null}
+
+      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+        <span className="text-xs text-slate-400 font-semibold uppercase tracking-wide">
+          {proposal.requirementCount != null
+            ? `${proposal.requirementCount} requirement${proposal.requirementCount === 1 ? '' : 's'}`
+            : 'Pending extraction'}
+        </span>
+        <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-blue-900 transition-colors" />
+      </div>
+    </Link>
   )
 }
 

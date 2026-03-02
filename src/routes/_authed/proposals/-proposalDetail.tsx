@@ -1,13 +1,12 @@
 import { convexQuery } from '@convex-dev/react-query'
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { Link, useParams } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Star, ArrowLeft, Download, Shield, CheckCircle, FileCheck, AlertTriangle } from 'lucide-react'
-import { api } from '../../../convex/_generated/api'
-import type { Doc, Id } from '../../../convex/_generated/dataModel'
-import { getSessionId } from '../../lib/session'
-import { cn } from '../../lib/utils'
+import { api } from '../../../../convex/_generated/api'
+import type { Doc, Id } from '../../../../convex/_generated/dataModel'
+import { cn } from '../../../lib/utils'
 
 const categoryOrder = [
   'evaluation_factor',
@@ -41,49 +40,24 @@ const categoryIcons: Record<(typeof categoryOrder)[number], React.ReactNode> = {
 
 const processingSteps = ['resolving', 'extracting', 'validating'] as const
 
-export const Route = createFileRoute('/proposals/$proposalId')({
-  component: ProposalDetailPage,
-  errorComponent: ({ error }) => (
-    <div className="mx-auto max-w-5xl px-4 sm:px-8 py-12">
-      <div className="border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-        Failed to render proposal detail: {error.message}
-      </div>
-    </div>
-  ),
-  head: () => ({
-    meta: [{ title: 'OmniBid | Proposal Matrix' }],
-  }),
-})
-
-function ProposalDetailPage() {
-  const { proposalId } = Route.useParams()
-  const [sessionId, setSessionId] = useState('')
-
-  useEffect(() => {
-    setSessionId(getSessionId())
-  }, [])
+export function ProposalDetailPage() {
+  const { proposalId } = useParams({ from: '/_authed/proposals/$proposalId' })
 
   const typedProposalId = proposalId as Id<'proposals'>
 
   const proposalQueryOptions = useMemo(
-    () => convexQuery(api.proposals.get, { proposalId: typedProposalId, sessionId }),
-    [typedProposalId, sessionId],
+    () => convexQuery(api.proposals.get, { proposalId: typedProposalId }),
+    [typedProposalId],
   )
   const requirementsQueryOptions = useMemo(
-    () => convexQuery(api.requirements.listByProposal, { proposalId: typedProposalId, sessionId }),
-    [typedProposalId, sessionId],
+    () => convexQuery(api.requirements.listByProposal, { proposalId: typedProposalId }),
+    [typedProposalId],
   )
 
-  const proposalQuery = useQuery({
-    ...proposalQueryOptions,
-    enabled: Boolean(sessionId),
-  })
-  const requirementsQuery = useQuery({
-    ...requirementsQueryOptions,
-    enabled: Boolean(sessionId),
-  })
+  const proposalQuery = useQuery(proposalQueryOptions)
+  const requirementsQuery = useQuery(requirementsQueryOptions)
 
-  if (!sessionId || proposalQuery.isLoading || requirementsQuery.isLoading) {
+  if (proposalQuery.isLoading || requirementsQuery.isLoading) {
     return <DetailSkeleton />
   }
 
@@ -399,7 +373,6 @@ function RequirementRow({ requirement, index }: { requirement: Doc<'requirements
           value={requirement.status}
           onChange={(event) => {
             void updateRequirementStatus({
-              sessionId: getSessionId(),
               requirementId: requirement._id,
               status: event.target.value as Doc<'requirements'>['status'],
             })

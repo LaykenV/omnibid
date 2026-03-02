@@ -171,19 +171,30 @@ export const resolveAndAcquire = internalAction({
       params.set('solnum', proposal.inputValue)
     }
 
-    const now = new Date()
-    const fiveYearsAgo = new Date(now)
-    fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5)
+    // postedFrom/postedTo are required for keyword/solnum searches but
+    // cause "Date range must be null" errors when searching by noticeid.
+    if (!params.has('noticeid')) {
+      const now = new Date()
+      const oneYearAgo = new Date(now)
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+      params.set('postedFrom', formatDate(oneYearAgo))
+      params.set('postedTo', formatDate(now))
+    }
 
-    params.set('postedFrom', formatDate(fiveYearsAgo))
-    params.set('postedTo', formatDate(now))
+    params.set('api_key', apiKey)
 
-    const searchUrl = `https://api.sam.gov/prod/opportunities/v2/search?${params.toString()}`
-    const searchResponse = await fetch(searchUrl, {
-      headers: { 'X-Api-Key': apiKey },
-    })
+    const searchUrl = `https://api.sam.gov/opportunities/v2/search?${params.toString()}`
+    console.log('[SAM.gov] Request URL:', searchUrl.replace(apiKey, 'REDACTED'))
+    const searchResponse = await fetch(searchUrl)
 
     if (!searchResponse.ok) {
+      const body = await searchResponse.text()
+      console.error('[SAM.gov] Error response:', searchResponse.status, body)
+      if (searchResponse.status === 429) {
+        throw new Error(
+          'SAM.gov API rate limit exceeded. Try again tomorrow or upload the RFP manually.',
+        )
+      }
       throw new Error(
         `SAM.gov API request failed (${searchResponse.status}). Upload the RFP manually if this persists.`,
       )
@@ -203,6 +214,8 @@ export const resolveAndAcquire = internalAction({
     const resourceLinks = Array.isArray(opportunity.resourceLinks)
       ? opportunity.resourceLinks.filter((link): link is string => typeof link === 'string')
       : []
+
+    console.log('[SAM.gov] Resource links:', JSON.stringify(resourceLinks))
 
     await ctx.runMutation(internal.proposals.patchSolicitation, {
       proposalId: args.proposalId,

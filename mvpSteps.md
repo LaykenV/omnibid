@@ -4,7 +4,7 @@
 
 User pastes a SAM.gov URL, enters a solicitation number, or uploads a PDF → gets an interactive compliance matrix with every requirement extracted, categorized, and traceable to its RFP reference.
 
-No auth. No payments. No multiplayer. Just the pipeline and the UI.
+Clerk auth. No payments. No multiplayer. Just the pipeline and the UI.
 
 ---
 
@@ -43,6 +43,9 @@ bun add @convex-dev/workflow
 # Vercel AI SDK + Google Gemini provider
 bun add ai @ai-sdk/google zod
 
+# Clerk auth for TanStack Start
+bun add @clerk/tanstack-start
+
 # UI utilities (for shadcn components)
 bun add @radix-ui/react-slot class-variance-authority clsx tailwind-merge
 ```
@@ -52,6 +55,14 @@ Set Convex environment variables:
 ```bash
 npx convex env set GOOGLE_GENERATIVE_AI_API_KEY "your-key-from-aistudio.google.com"
 npx convex env set SAM_GOV_API_KEY "your-key-from-api.sam.gov"
+npx convex env set CLERK_JWT_ISSUER_DOMAIN "https://your-domain.clerk.accounts.dev"
+```
+
+Set app env vars:
+
+```bash
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
 ```
 
 **Note:** SAM.gov API key registration can take 1-4 weeks for entity-associated access (1,000 req/day). Public tier gives 10 req/day — enough for development. Register now if you haven't.
@@ -78,7 +89,7 @@ export default app;
 
 Create `convex/schema.ts` with 4 tables:
 
-- **`proposals`** — the core entity. Fields: `sessionId`, `title`, `status` (created → resolving → extracting → validating → matrix_ready → error), `statusMessage`, `pipelineVersion`, `inputType`, `inputValue`, `rfpFileIds`, `solicitation` (nested object for SAM.gov metadata), `formatting` (nested object for Section L rules), `resourceLinks`, `requirementCount`, `workflowId`, `errorMessage`. Indexes: `by_session`, `by_status`.
+- **`proposals`** — the core entity. Fields: `ownerId` (Clerk subject), `title`, `status` (created → resolving → extracting → validating → matrix_ready → error), `statusMessage`, `pipelineVersion`, `inputType`, `inputValue`, `rfpFileIds`, `solicitation` (nested object for SAM.gov metadata), `formatting` (nested object for Section L rules), `resourceLinks`, `requirementCount`, `workflowId`, `errorMessage`. Indexes: `by_owner`, `by_status`.
 
 - **`rfpDocuments`** — individual files per proposal. Fields: `proposalId`, `fileName`, `fileType`, `fileId` (Convex storage ref), `sourceUrl`, `status`, `errorMessage`. Index: `by_proposal`.
 
@@ -95,10 +106,10 @@ Full schema code is in `TECHNICAL.md` → "Database Schema" section.
 ### 3a. `convex/proposals.ts`
 
 Public functions:
-- `create` — mutation. Takes `sessionId`, `inputType`, `inputValue`, optional `rfpFileIds`. Inserts proposal with `status: "created"` and `pipelineVersion: 1`. Starts the ingestion workflow via `workflow.start()`. Returns `proposalId`.
-- `list` — query. Takes `sessionId`. Returns all proposals for this session, ordered desc.
-- `get` — query. Takes `proposalId`. Returns the proposal.
-- `generateUploadUrl` — mutation. Returns a Convex storage upload URL for PDF uploads.
+- `create` — mutation. Takes `inputType`, `inputValue`, optional `rfpFileIds`. Uses `ctx.auth.getUserIdentity()` and inserts proposal with `ownerId = identity.subject`, `status: "created"`, and `pipelineVersion: 1`. Starts the ingestion workflow via `workflow.start()`. Returns `proposalId`.
+- `list` — query. Takes no args. Uses `ctx.auth.getUserIdentity()` and returns proposals for that owner, ordered desc.
+- `get` — query. Takes `proposalId`. Returns proposal only if `proposal.ownerId === identity.subject`.
+- `generateUploadUrl` — mutation. Takes no args. Requires auth and returns a Convex storage upload URL.
 
 Internal functions (called by workflow steps only):
 - `updateStatus` — patches `status`, `statusMessage`, `errorMessage`
@@ -109,8 +120,8 @@ Internal functions (called by workflow steps only):
 ### 3b. `convex/requirements.ts`
 
 Public functions:
-- `listByProposal` — query. Returns all requirements for a proposal.
-- `updateStatus` — mutation. User marks a requirement as addressed / not_applicable / etc. Also accepts optional `notes`.
+- `listByProposal` — query. Returns requirements only when the parent proposal belongs to the authenticated owner.
+- `updateStatus` — mutation. User marks a requirement as addressed / not_applicable / etc. Also accepts optional `notes`, and enforces parent proposal ownership.
 
 Internal functions (called by workflow steps):
 - `bulkInsert` — inserts an array of requirements for a proposal
@@ -253,25 +264,24 @@ Full code in `TECHNICAL.md` → "Step 3: Validate & Organize" section.
 
 ---
 
-## Step 8: Session ID Helper
+## Step 8: Auth + Route Wiring
 
-Create `src/lib/session.ts`:
+Create `src/routes/_authed.tsx` as a protected pathless layout:
 
-```typescript
-const SESSION_KEY = "omnibid_session_id";
+- Add `beforeLoad` that redirects to `/sign-in` when `context.userId` is missing.
+- Render `<Outlet />` for child routes.
 
-export function getSessionId(): string {
-  if (typeof window === "undefined") return "";
-  let sessionId = localStorage.getItem(SESSION_KEY);
-  if (!sessionId) {
-    sessionId = crypto.randomUUID();
-    localStorage.setItem(SESSION_KEY, sessionId);
-  }
-  return sessionId;
-}
-```
+Create public Clerk auth routes:
 
-Create `src/lib/utils.ts` (for shadcn `cn()` helper):
+- `src/routes/sign-in.tsx` with `<SignIn />`
+- `src/routes/sign-up.tsx` with `<SignUp />`
+
+Create `src/lib/useRoutePrewarmIntent.ts`:
+
+- Hook returns one-shot `onMouseEnter`, `onFocus`, and `onTouchStart` handlers.
+- Use it to prewarm Convex route data on intent.
+
+Keep `src/lib/utils.ts` (for shadcn `cn()` helper):
 
 ```typescript
 import { type ClassValue, clsx } from "clsx";
@@ -284,37 +294,38 @@ export function cn(...inputs: ClassValue[]) {
 
 ---
 
-## Step 9: Frontend Route — Proposals List
+## Step 9: Frontend Route — Protected Proposals List
 
-Create `src/routes/proposals/index.tsx`:
+Create `src/routes/_authed/proposals/index.tsx` as a thin route file and move UI to `src/routes/_authed/proposals/-proposals.tsx`:
 
-- Uses `convexQuery(api.proposals.list, { sessionId })` for real-time data
+- Uses `convexQuery(api.proposals.list, {})` for real-time data
 - Shows list of proposals as cards with title, agency, status badge, requirement count
 - "New Proposal" button linking to `/proposals/new`
 - Empty state with CTA when no proposals exist
 - Status badges: Created (gray), Resolving (yellow), Extracting (blue), Validating (purple), Ready (green), Error (red)
+- Proposal cards prewarm detail queries via `-proposalDetail.data.ts`
 
 ---
 
-## Step 10: Frontend Route — New Proposal Form
+## Step 10: Frontend Route — Protected New Proposal Form
 
-Create `src/routes/proposals/new.tsx`:
+Create `src/routes/_authed/proposals/new.tsx` as a thin route file and move UI to `src/routes/_authed/proposals/-newProposal.tsx`:
 
 - Three input mode tabs: "SAM.gov URL" | "Solicitation #" | "Upload PDF"
 - For URL/solicitation: text input with placeholder
 - For PDF: file input accepting `.pdf, .docx` with drag-and-drop styling
 - On submit:
   - If PDF upload: call `generateUploadUrl()`, upload file via `fetch(POST)`, get `storageId`
-  - Call `proposals.create()` with sessionId, inputType, inputValue, rfpFileIds
+  - Call `proposals.create()` with `inputType`, `inputValue`, `rfpFileIds`
   - Navigate to `/proposals/$proposalId`
 - Disable submit button while processing
 - Show error state if creation fails
 
 ---
 
-## Step 11: Frontend Route — Proposal Detail (Matrix View)
+## Step 11: Frontend Route — Protected Proposal Detail (Matrix View)
 
-Create `src/routes/proposals/$proposalId.tsx`:
+Create `src/routes/_authed/proposals/$proposalId.tsx` as a thin route file and move UI to `src/routes/_authed/proposals/-proposalDetail.tsx`:
 
 This is the main product page — the thing we're selling. Build it in sub-steps:
 
@@ -392,7 +403,6 @@ Total requirements count + per-category counts as badges/pills. Place between th
 
 ## Step 13: Polish
 
-- [ ] **SSR sessionId hydration fix** — `getSessionId()` returns `""` on the server (no `localStorage`). This means the initial SSR render passes `sessionId: ""` to Convex queries, which returns no data. On hydration, the client gets the real sessionId and re-renders — causing a flash of empty state. Fix: skip rendering the proposals query until `sessionId` is truthy, or show a loading skeleton during the first client render.
 - [ ] Error boundaries on all routes (catch rendering errors gracefully)
 - [ ] Loading skeletons for proposal list and matrix view
 - [ ] Mobile-responsive layout for the matrix (at minimum: readable on tablet)
@@ -425,13 +435,22 @@ convex/
 
 src/
 ├── lib/
-│   ├── session.ts                ← Step 8
+│   ├── useRoutePrewarmIntent.ts  ← Step 8
 │   └── utils.ts                  ← Step 8
 └── routes/
-    └── proposals/
-        ├── index.tsx             ← Step 9
-        ├── new.tsx               ← Step 10
-        └── $proposalId.tsx       ← Step 11
+    ├── _authed.tsx               ← Step 8
+    ├── sign-in.tsx               ← Step 8
+    ├── sign-up.tsx               ← Step 8
+    └── _authed/
+        └── proposals/
+            ├── index.tsx                 ← Step 9 (thin route)
+            ├── -proposals.tsx            ← Step 9 (UI)
+            ├── -proposals.data.ts        ← Step 9 (prewarm)
+            ├── new.tsx                   ← Step 10 (thin route)
+            ├── -newProposal.tsx          ← Step 10 (UI)
+            ├── $proposalId.tsx           ← Step 11 (thin route)
+            ├── -proposalDetail.tsx       ← Step 11 (UI)
+            └── -proposalDetail.data.ts   ← Step 11 (prewarm)
 ```
 
 ---
@@ -447,10 +466,10 @@ src/
 | 5 | Step 1: Resolve & Acquire | `steps/resolveAndAcquire.ts` | Step 4 |
 | 6 | Step 2: Extract Requirements | `steps/extractRequirements.ts` | Step 4 |
 | 7 | Step 3: Validate & Organize | `steps/validateAndOrganize.ts` | Step 4 |
-| 8 | Session ID + utils | `src/lib/session.ts`, `src/lib/utils.ts` | Nothing |
-| 9 | Proposals list page | `src/routes/proposals/index.tsx` | Steps 3, 8 |
-| 10 | New proposal form | `src/routes/proposals/new.tsx` | Steps 3, 8 |
-| 11 | Matrix view page | `src/routes/proposals/$proposalId.tsx` | Steps 3, 8 |
+| 8 | Clerk auth + prewarm wiring | `_authed.tsx`, `sign-in.tsx`, `sign-up.tsx`, `useRoutePrewarmIntent.ts` | Step 1 |
+| 9 | Proposals list page | `src/routes/_authed/proposals/index.tsx`, `-proposals.tsx`, `-proposals.data.ts` | Steps 3, 8 |
+| 10 | New proposal form | `src/routes/_authed/proposals/new.tsx`, `-newProposal.tsx` | Steps 3, 8 |
+| 11 | Matrix view page | `src/routes/_authed/proposals/$proposalId.tsx`, `-proposalDetail.tsx`, `-proposalDetail.data.ts` | Steps 3, 8 |
 | 12 | End-to-end testing | — | Steps 1-11 |
 | 13 | Polish | Various | Step 12 |
 
@@ -466,10 +485,10 @@ All implementation code is in `TECHNICAL.md`. This doc tells you what to build a
 
 These are intentionally out of scope for MVP. Document them so they don't become surprise bugs:
 
-- **No authentication** — anyone with the URL can create proposals. Session isolation is by localStorage UUID only.
+- **Authentication required** — protected routes require Clerk sign-in (`/proposals*`).
 - **No payments** — the product is free during MVP. Stripe integration comes after validation.
 - **No XLSX/ZIP/MSG support** — SAM.gov sometimes attaches Excel spreadsheets, ZIP archives, or Outlook messages. MVP only processes PDF and DOCX files. Other file types are silently skipped during download.
 - **No retry UI** — if a proposal fails, the user must create a new one. There's no "retry" button. (The backend workflow retries automatically, but if all retries are exhausted, it's a dead end.)
 - **No RFP amendments** — SAM.gov solicitations get amended frequently. MVP processes whatever is posted at the time of ingestion. No tracking of amendments or re-processing.
 - **Very large RFPs (1,000+ pages)** — Gemini 3 Flash has a 1M token context window (~700K words), so most RFPs fit. But multi-volume procurement packages with 1,000+ pages may hit limits. No chunking strategy in MVP.
-- **Single-user only** — no team features, no sharing, no collaboration. One sessionId = one user's proposals.
+- **Single-user only** — no team features, no sharing, no collaboration. One Clerk identity owns one user's proposals.

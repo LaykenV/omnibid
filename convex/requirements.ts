@@ -1,4 +1,11 @@
-import { mutation, query, internalMutation, internalQuery } from './_generated/server'
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from './_generated/server'
 import { v } from 'convex/values'
 
 const requirementCategory = v.union(
@@ -18,11 +25,21 @@ const requirementStatus = v.union(
   v.literal('not_applicable'),
 )
 
+async function requireIdentity(ctx: QueryCtx | MutationCtx) {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) {
+    throw new Error('Not authenticated')
+  }
+  return identity
+}
+
 export const listByProposal = query({
-  args: { proposalId: v.id('proposals'), sessionId: v.string() },
+  args: { proposalId: v.id('proposals') },
   handler: async (ctx, args) => {
+    const identity = await requireIdentity(ctx)
     const proposal = await ctx.db.get(args.proposalId)
-    if (!proposal || proposal.sessionId !== args.sessionId) {
+
+    if (!proposal || proposal.ownerId !== identity.subject) {
       return []
     }
 
@@ -49,17 +66,17 @@ export const listByProposalInternal = internalQuery({
 
 export const updateStatus = mutation({
   args: {
-    sessionId: v.string(),
     requirementId: v.id('requirements'),
     status: requirementStatus,
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const identity = await requireIdentity(ctx)
     const requirement = await ctx.db.get(args.requirementId)
     if (!requirement) throw new Error('Requirement not found')
 
     const proposal = await ctx.db.get(requirement.proposalId)
-    if (!proposal || proposal.sessionId !== args.sessionId) {
+    if (!proposal || proposal.ownerId !== identity.subject) {
       throw new Error('Unauthorized')
     }
 

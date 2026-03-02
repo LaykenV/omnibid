@@ -1,4 +1,11 @@
-import { mutation, query, internalMutation, internalQuery } from './_generated/server'
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from './_generated/server'
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { workflow } from './workflows/manager'
@@ -42,9 +49,16 @@ const formattingValidator = v.object({
   volumes: v.optional(v.array(v.string())),
 })
 
+async function requireIdentity(ctx: QueryCtx | MutationCtx) {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) {
+    throw new Error('Not authenticated')
+  }
+  return identity
+}
+
 export const create = mutation({
   args: {
-    sessionId: v.string(),
     inputType: v.union(
       v.literal('sam_url'),
       v.literal('solicitation_num'),
@@ -55,6 +69,8 @@ export const create = mutation({
     rfpFileIds: v.optional(v.array(v.id('_storage'))),
   },
   handler: async (ctx, args) => {
+    const identity = await requireIdentity(ctx)
+
     if (!args.inputValue.trim()) {
       throw new Error('Input value cannot be empty')
     }
@@ -66,7 +82,7 @@ export const create = mutation({
     }
 
     const proposalId = await ctx.db.insert('proposals', {
-      sessionId: args.sessionId,
+      ownerId: identity.subject,
       title: args.title || 'New Proposal',
       status: 'created',
       statusMessage: 'Queued for processing',
@@ -88,23 +104,28 @@ export const create = mutation({
 })
 
 export const list = query({
-  args: { sessionId: v.string() },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
+    const identity = await requireIdentity(ctx)
+
     return await ctx.db
       .query('proposals')
-      .withIndex('by_session', (q) => q.eq('sessionId', args.sessionId))
+      .withIndex('by_owner', (q) => q.eq('ownerId', identity.subject))
       .order('desc')
       .collect()
   },
 })
 
 export const get = query({
-  args: { proposalId: v.id('proposals'), sessionId: v.string() },
+  args: { proposalId: v.id('proposals') },
   handler: async (ctx, args) => {
+    const identity = await requireIdentity(ctx)
     const proposal = await ctx.db.get(args.proposalId)
-    if (!proposal || proposal.sessionId !== args.sessionId) {
+
+    if (!proposal || proposal.ownerId !== identity.subject) {
       return null
     }
+
     return proposal
   },
 })
@@ -117,11 +138,9 @@ export const getInternal = internalQuery({
 })
 
 export const generateUploadUrl = mutation({
-  args: { sessionId: v.string() },
-  handler: async (ctx, args) => {
-    if (!args.sessionId) {
-      throw new Error('sessionId is required')
-    }
+  args: {},
+  handler: async (ctx) => {
+    await requireIdentity(ctx)
     return await ctx.storage.generateUploadUrl()
   },
 })

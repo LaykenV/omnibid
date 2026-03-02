@@ -203,10 +203,12 @@ For each requirement, include the most precise citation possible (section/page/p
           status: 'processed',
         })
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.error('[Extract] Document failed:', documentId, errorMessage)
         await ctx.runMutation(internal.rfpDocuments.updateStatus, {
           documentId,
           status: 'failed',
-          errorMessage: error instanceof Error ? error.message : String(error),
+          errorMessage,
         })
       }
     }

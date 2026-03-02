@@ -4,9 +4,9 @@
 
 **One thing, done perfectly:** User provides an RFP (SAM.gov URL, solicitation number, or PDF upload) and gets back a structured, interactive compliance matrix.
 
-No auth. No payments. No multiplayer editing. No draft generation. No knowledge base. Just the core ingestion pipeline and compliance matrix UI working end-to-end.
+Clerk auth. No payments. No multiplayer editing. No draft generation. No knowledge base. Just the core ingestion pipeline and compliance matrix UI working end-to-end.
 
-Anonymous users identified by a `sessionId` (UUID stored in localStorage) — trivial to add now, painful to retrofit when auth comes later.
+Identity-first model: Convex reads Clerk JWT identity directly via `ctx.auth.getUserIdentity()`. No Convex `users` table is required for MVP.
 
 ---
 
@@ -117,11 +117,20 @@ omnibid/
 ├── src/
 │   ├── routes/
 │   │   ├── __root.tsx
-│   │   ├── index.tsx                     # Landing page (exists)
-│   │   └── proposals/
-│   │       ├── index.tsx                 # Proposals list
-│   │       ├── new.tsx                   # New proposal: URL input + PDF upload
-│   │       └── $proposalId.tsx           # Proposal detail: matrix view
+│   │   ├── index.tsx                     # Landing page (exists, prerendered)
+│   │   ├── _authed.tsx                   # Pathless auth boundary
+│   │   ├── sign-in.tsx                   # Clerk SignIn route
+│   │   ├── sign-up.tsx                   # Clerk SignUp route
+│   │   └── _authed/
+│   │       └── proposals/
+│   │           ├── index.tsx             # Thin route: proposals list
+│   │           ├── -proposals.tsx        # Proposals list UI
+│   │           ├── -proposals.data.ts    # Proposals prewarm contract
+│   │           ├── new.tsx               # Thin route: new proposal
+│   │           ├── -newProposal.tsx      # New proposal UI
+│   │           ├── $proposalId.tsx       # Thin route: proposal detail
+│   │           ├── -proposalDetail.tsx   # Proposal detail UI
+│   │           └── -proposalDetail.data.ts # Detail prewarm contract
 │   ├── components/
 │   │   ├── ui/                           # shadcn components
 │   │   ├── NewProposalForm.tsx           # URL/upload input form
@@ -133,7 +142,7 @@ omnibid/
 │   │   └── ExportButton.tsx              # CSV export
 │   ├── lib/
 │   │   ├── utils.ts                      # cn() helper
-│   │   └── session.ts                    # sessionId (UUID in localStorage)
+│   │   └── useRoutePrewarmIntent.ts      # One-shot prewarm handlers
 │   ├── router.tsx                        # (exists)
 │   └── styles.css                        # (exists)
 ├── convex/
@@ -173,8 +182,8 @@ export default defineSchema({
   // PROPOSALS (the core entity)
   // ==========================================
   proposals: defineTable({
-    // Session tracking (anonymous users, pre-auth)
-    sessionId: v.string(),
+    // Owner is Clerk user ID (identity.subject)
+    ownerId: v.string(),
 
     title: v.string(),
     status: v.union(
@@ -239,7 +248,7 @@ export default defineSchema({
     workflowId: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
   })
-    .index("by_session", ["sessionId"])
+    .index("by_owner", ["ownerId"])
     .index("by_status", ["status"]),
 
   // ==========================================
@@ -323,7 +332,7 @@ export default defineSchema({
 
 **`pipelineVersion` on proposals.** When we change the workflow logic, old proposals still reference the version they were processed with. Prevents determinism violations during rapid iteration.
 
-**`sessionId` on proposals.** UUID from localStorage. When auth is added later, we migrate proposals by matching sessionId to the authenticated user. No data loss, no re-processing.
+**`ownerId` on proposals.** Clerk `identity.subject` is stored directly on insert. Every read/write is filtered by owner.
 
 **No `parsedText` field.** We never store the parsed markdown — Gemini handles the PDF directly. This avoids the Convex 1MB document size limit issue entirely.
 
@@ -1067,7 +1076,6 @@ const CURRENT_PIPELINE_VERSION = 1;
 
 export const create = mutation({
   args: {
-    sessionId: v.string(),
     inputType: v.union(
       v.literal("sam_url"),
       v.literal("solicitation_num"),
@@ -1078,8 +1086,11 @@ export const create = mutation({
     rfpFileIds: v.optional(v.array(v.id("_storage"))),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
     const proposalId = await ctx.db.insert("proposals", {
-      sessionId: args.sessionId,
+      ownerId: identity.subject,
       title: args.title || "New Proposal",
       status: "created",
       pipelineVersion: CURRENT_PIPELINE_VERSION,
@@ -1101,11 +1112,14 @@ export const create = mutation({
 });
 
 export const list = query({
-  args: { sessionId: v.string() },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
     return await ctx.db
       .query("proposals")
-      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+      .withIndex("by_owner", (q) => q.eq("ownerId", identity.subject))
       .order("desc")
       .collect();
   },
@@ -1114,13 +1128,20 @@ export const list = query({
 export const get = query({
   args: { proposalId: v.id("proposals") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.proposalId);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const proposal = await ctx.db.get(args.proposalId);
+    if (!proposal || proposal.ownerId !== identity.subject) return null;
+    return proposal;
   },
 });
 
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -1378,42 +1399,41 @@ export const create = internalMutation({
 
 ## Frontend
 
-### Session ID Helper
+### Auth + Prewarm Helper
 
 ```typescript
-// src/lib/session.ts
-const SESSION_KEY = "omnibid_session_id";
+// src/lib/useRoutePrewarmIntent.ts
+import { useCallback, useRef } from "react";
 
-export function getSessionId(): string {
-  if (typeof window === "undefined") return "";
+export function useRoutePrewarmIntent(prewarmFn: () => void) {
+  const hasFired = useRef(false);
 
-  let sessionId = localStorage.getItem(SESSION_KEY);
-  if (!sessionId) {
-    sessionId = crypto.randomUUID();
-    localStorage.setItem(SESSION_KEY, sessionId);
-  }
-  return sessionId;
+  const handler = useCallback(() => {
+    if (hasFired.current) return;
+    hasFired.current = true;
+    prewarmFn();
+  }, [prewarmFn]);
+
+  return {
+    onMouseEnter: handler,
+    onFocus: handler,
+    onTouchStart: handler,
+  };
 }
 ```
 
 ### Proposals List
 
 ```typescript
-// src/routes/proposals/index.tsx
-import { createFileRoute, Link } from "@tanstack/react-router";
+// src/routes/_authed/proposals/-proposals.tsx
+import { Link } from "@tanstack/react-router";
 import { convexQuery } from "@convex-dev/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { api } from "../../../convex/_generated/api";
-import { getSessionId } from "../../lib/session";
-
-export const Route = createFileRoute("/proposals/")({
-  component: ProposalsList,
-});
+import { api } from "../../../../convex/_generated/api";
 
 function ProposalsList() {
-  const sessionId = getSessionId();
   const { data: proposals } = useSuspenseQuery(
-    convexQuery(api.proposals.list, { sessionId })
+    convexQuery(api.proposals.list, {})
   );
 
   return (
@@ -1497,16 +1517,11 @@ function StatusBadge({ status }: { status: string }) {
 ### New Proposal Form
 
 ```typescript
-// src/routes/proposals/new.tsx
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+// src/routes/_authed/proposals/-newProposal.tsx
+import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
-import { api } from "../../../convex/_generated/api";
+import { api } from "../../../../convex/_generated/api";
 import { useState } from "react";
-import { getSessionId } from "../../lib/session";
-
-export const Route = createFileRoute("/proposals/new")({
-  component: NewProposal,
-});
 
 function NewProposal() {
   const navigate = useNavigate();
@@ -1539,7 +1554,6 @@ function NewProposal() {
       }
 
       const proposalId = await createProposal({
-        sessionId: getSessionId(),
         inputType,
         inputValue: inputType === "pdf_upload" ? file?.name || "upload.pdf" : inputValue,
         rfpFileIds,
@@ -1910,7 +1924,7 @@ bun run dev
 ## What Ships in MVP
 
 1. Landing page (exists)
-2. `/proposals` — List of parsed proposals (scoped by sessionId)
+2. `/proposals` — List of parsed proposals (scoped by Clerk owner identity)
 3. `/proposals/new` — Input form (SAM.gov URL, solicitation #, or PDF upload)
 4. `/proposals/$proposalId` — Compliance matrix view with:
    - Solicitation summary header (metadata from SAM.gov API + Gemini extraction)
@@ -1924,7 +1938,6 @@ bun run dev
 
 ## What Does NOT Ship in MVP
 
-- Authentication / user accounts
 - Payments / Stripe
 - Company knowledge base / RAG
 - Draft generation

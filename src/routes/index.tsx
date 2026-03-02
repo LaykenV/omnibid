@@ -45,7 +45,11 @@ function PatrioticHome() {
                 Parse an RFP
                 <ArrowRight className="w-5 h-5" />
               </Link>
-              <Link to="/proposals" className="px-8 py-4 bg-blue-900 text-white font-bold text-lg hover:bg-blue-800 transition-colors shadow-lg shadow-blue-900/20 inline-flex items-center justify-center">
+              <Link
+                to="/proposals"
+                preload="intent"
+                className="px-8 py-4 bg-blue-900 text-white font-bold text-lg hover:bg-blue-800 transition-colors shadow-lg shadow-blue-900/20 inline-flex items-center justify-center"
+              >
                 View Proposals
               </Link>
             </div>
