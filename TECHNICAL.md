@@ -1949,15 +1949,15 @@ bun run dev
 - Firecrawl / web scraping
 - Opportunity discovery / search
 
-## Pricing Context
+## Business Context
 
-The MVP compliance matrix is the **$99-$149 wedge product**. It's priced as an impulse buy (15-20x ROI vs manual labor) to drive volume and conversion up the value ladder:
+OmniBid the app is **private operator tooling** for a done-for-you proposal operations service. We do not sell the app directly. Clients pay $2,500 for a one-off Bid Readiness Audit or $5–10k/month for a Proposal Ops Retainer; deliverables are PDF / Excel / Word documents produced by a single operator using this app.
 
-```
-$99-$149  Matrix (MVP)
-$299-$499 Bid Intel: go/no-go score, outline, team deliverables (Phase 1.5)
-$3-5K     Full proposal draft generation (Phase 2)
-$5-50K/mo SaaS for teams (Phase 3)
-```
+This shapes what we build and what we don't:
 
-Build Phase 1. Ship it. Charge $99. Convert up the ladder. Everything else follows.
+- No payments, no public signup, no team management UI
+- No multiplayer editing, no collaborative review
+- No customer-facing marketing surface beyond the audit landing page
+- Yes to: better extraction quality, confidence scoring, Excel/PDF exports, opportunity monitoring, per-client knowledge libraries
+
+See `business.md` for the full service-business plan, offer stack, sales motion, and 90-day execution plan.
