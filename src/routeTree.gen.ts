@@ -16,6 +16,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthedProposalsIndexRouteImport } from './routes/_authed/proposals/index'
 import { Route as AuthedProposalsNewRouteImport } from './routes/_authed/proposals/new'
 import { Route as AuthedProposalsProposalIdRouteImport } from './routes/_authed/proposals/$proposalId'
+import { Route as AuthedDemoRfpAgentRouteImport } from './routes/_authed/demo/rfp-agent'
 
 const SignUpRoute = SignUpRouteImport.update({
   id: '/sign-up',
@@ -52,11 +53,17 @@ const AuthedProposalsProposalIdRoute =
     path: '/proposals/$proposalId',
     getParentRoute: () => AuthedRoute,
   } as any)
+const AuthedDemoRfpAgentRoute = AuthedDemoRfpAgentRouteImport.update({
+  id: '/demo/rfp-agent',
+  path: '/demo/rfp-agent',
+  getParentRoute: () => AuthedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/demo/rfp-agent': typeof AuthedDemoRfpAgentRoute
   '/proposals/$proposalId': typeof AuthedProposalsProposalIdRoute
   '/proposals/new': typeof AuthedProposalsNewRoute
   '/proposals/': typeof AuthedProposalsIndexRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/demo/rfp-agent': typeof AuthedDemoRfpAgentRoute
   '/proposals/$proposalId': typeof AuthedProposalsProposalIdRoute
   '/proposals/new': typeof AuthedProposalsNewRoute
   '/proposals': typeof AuthedProposalsIndexRoute
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   '/_authed': typeof AuthedRouteWithChildren
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/_authed/demo/rfp-agent': typeof AuthedDemoRfpAgentRoute
   '/_authed/proposals/$proposalId': typeof AuthedProposalsProposalIdRoute
   '/_authed/proposals/new': typeof AuthedProposalsNewRoute
   '/_authed/proposals/': typeof AuthedProposalsIndexRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
     | '/'
     | '/sign-in'
     | '/sign-up'
+    | '/demo/rfp-agent'
     | '/proposals/$proposalId'
     | '/proposals/new'
     | '/proposals/'
@@ -93,6 +103,7 @@ export interface FileRouteTypes {
     | '/'
     | '/sign-in'
     | '/sign-up'
+    | '/demo/rfp-agent'
     | '/proposals/$proposalId'
     | '/proposals/new'
     | '/proposals'
@@ -102,6 +113,7 @@ export interface FileRouteTypes {
     | '/_authed'
     | '/sign-in'
     | '/sign-up'
+    | '/_authed/demo/rfp-agent'
     | '/_authed/proposals/$proposalId'
     | '/_authed/proposals/new'
     | '/_authed/proposals/'
@@ -165,16 +177,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedProposalsProposalIdRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/demo/rfp-agent': {
+      id: '/_authed/demo/rfp-agent'
+      path: '/demo/rfp-agent'
+      fullPath: '/demo/rfp-agent'
+      preLoaderRoute: typeof AuthedDemoRfpAgentRouteImport
+      parentRoute: typeof AuthedRoute
+    }
   }
 }
 
 interface AuthedRouteChildren {
+  AuthedDemoRfpAgentRoute: typeof AuthedDemoRfpAgentRoute
   AuthedProposalsProposalIdRoute: typeof AuthedProposalsProposalIdRoute
   AuthedProposalsNewRoute: typeof AuthedProposalsNewRoute
   AuthedProposalsIndexRoute: typeof AuthedProposalsIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedDemoRfpAgentRoute: AuthedDemoRfpAgentRoute,
   AuthedProposalsProposalIdRoute: AuthedProposalsProposalIdRoute,
   AuthedProposalsNewRoute: AuthedProposalsNewRoute,
   AuthedProposalsIndexRoute: AuthedProposalsIndexRoute,

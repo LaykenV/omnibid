@@ -69,6 +69,7 @@ function RootComponent() {
 function RootDocument({ children }: { children: ReactNode }) {
   const matches = useMatches()
   const isHome = matches[matches.length - 1]?.fullPath === '/'
+  const hideChrome = matches.some((match) => match.fullPath === '/demo/rfp-agent')
   const { convexClient } = Route.useRouteContext()
   const isServer = typeof window === 'undefined'
 
@@ -79,11 +80,11 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body>
         {isServer ? (
-          <AppShell isHome={isHome}>{children}</AppShell>
+          <AppShell isHome={isHome} hideChrome={hideChrome}>{children}</AppShell>
         ) : (
           <ClerkProvider>
             <ConvexProviderWithClerk client={convexClient} useAuth={useAuth}>
-              <AppShell isHome={isHome}>
+              <AppShell isHome={isHome} hideChrome={hideChrome}>
                 {children}
               </AppShell>
             </ConvexProviderWithClerk>
@@ -98,17 +99,19 @@ function RootDocument({ children }: { children: ReactNode }) {
 function AppShell({
   children,
   isHome,
+  hideChrome,
 }: {
   children: ReactNode
   isHome: boolean
+  hideChrome: boolean
 }) {
   const isServer = typeof window === 'undefined'
 
   return (
     <div className="min-h-screen bg-white text-slate-900 selection:bg-blue-200 flex flex-col">
-      <div className="h-2 bg-gradient-to-r from-red-600 via-red-600 to-red-600" />
+      {!hideChrome ? <div className="h-2 bg-gradient-to-r from-red-600 via-red-600 to-red-600" /> : null}
 
-      <nav className="border-b border-slate-200 px-4 sm:px-8">
+      {!hideChrome ? <nav className="border-b border-slate-200 px-4 sm:px-8">
         <div className="max-w-7xl mx-auto h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link to="/">
@@ -128,11 +131,11 @@ function AppShell({
           ) : null}
           {isServer ? <StaticNavActions /> : <NavAuthActions />}
         </div>
-      </nav>
+      </nav> : null}
 
       <main className="flex-1">{children}</main>
 
-      <footer className="bg-slate-900 text-white py-10 px-4 sm:px-8">
+      {!hideChrome ? <footer className="bg-slate-900 text-white py-10 px-4 sm:px-8">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-white/10 rounded flex items-center justify-center">
@@ -142,7 +145,7 @@ function AppShell({
           </div>
           <p className="text-slate-500 text-sm">&copy; {new Date().getFullYear()} OmniBid. All rights reserved. Made in the U.S.A.</p>
         </div>
-      </footer>
+      </footer> : null}
     </div>
   )
 }

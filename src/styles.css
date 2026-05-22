@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 body {
@@ -12,4 +13,232 @@ body {
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
     monospace;
+}
+
+/* ============================================================
+   Demo page — Varholdt AI loom recording surface
+   Tokens mirror the varholdt.ai marketing site.
+   ============================================================ */
+.demo-shell {
+  --ink: #0a0b0e;
+  --ink-1: #0f1116;
+  --ink-2: #14171e;
+  --ink-3: #1b1f28;
+  --ink-4: #232834;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.12);
+  --line-3: rgba(255, 255, 255, 0.18);
+  --text: #eceff5;
+  --text-2: #c9cfdb;
+  --muted: rgba(236, 239, 245, 0.62);
+  --faint: rgba(236, 239, 245, 0.38);
+  --accent: #a6c8f2;
+  --accent-soft: #c5dbf5;
+  --accent-dim: rgba(166, 200, 242, 0.18);
+  --signal: #7dc09a;
+  --warn: #e6b978;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  background: var(--ink);
+  color: var(--text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.demo-shell em {
+  font-style: normal;
+  color: var(--accent);
+  font-weight: 500;
+}
+.demo-shell ::selection {
+  background: var(--accent);
+  color: var(--ink);
+}
+
+.demo-font-sans {
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+}
+.demo-font-mono {
+  font-family: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+
+/* Animations */
+@keyframes demo-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes demo-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes demo-pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@keyframes demo-ring-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(166, 200, 242, 0.45); }
+  70% { box-shadow: 0 0 0 14px rgba(166, 200, 242, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(166, 200, 242, 0); }
+}
+@keyframes demo-flow {
+  to { left: calc(100% + 8px); }
+}
+@keyframes demo-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.demo-animate-in { animation: demo-fade-up 700ms var(--ease-out) both; }
+.demo-animate-fade { animation: demo-fade-in 600ms ease-out both; }
+.demo-pulse-soft { animation: demo-pulse-soft 2s ease-in-out infinite; }
+.demo-pulse-ring { animation: demo-ring-pulse 1.8s ease-out infinite; }
+
+/* Atmospheric backgrounds */
+.demo-bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: 64px 64px;
+  background-position: center top;
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 14%, #000 80%, transparent 100%);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.demo-bg-glow {
+  position: absolute;
+  left: 50%;
+  top: 220px;
+  transform: translateX(-50%);
+  width: 900px;
+  max-width: 110%;
+  height: 360px;
+  background: radial-gradient(ellipse at center, rgba(166, 200, 242, 0.08), transparent 70%);
+  filter: blur(50px);
+  pointer-events: none;
+}
+
+/* Buttons matching marketing site */
+.demo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 13px 22px;
+  border-radius: 10px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  border: 1px solid transparent;
+  transition: all 220ms var(--ease);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.demo-btn-primary {
+  background: linear-gradient(180deg, #c5dbf5 0%, #a6c8f2 100%);
+  color: var(--ink);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(20, 40, 80, 0.10),
+    0 6px 18px -8px rgba(166, 200, 242, 0.5);
+}
+.demo-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #d8e6f8 0%, #b7d2f4 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    inset 0 -1px 0 rgba(20, 40, 80, 0.12),
+    0 14px 36px -10px rgba(166, 200, 242, 0.6);
+  transform: translateY(-1px);
+}
+.demo-btn-primary:disabled {
+  background: rgba(236, 239, 245, 0.08);
+  color: rgba(236, 239, 245, 0.4);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.demo-btn-ghost {
+  color: var(--text);
+  border-color: var(--line-2);
+  background: rgba(255, 255, 255, 0.02);
+}
+.demo-btn-ghost:hover {
+  border-color: var(--line-3);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Surfaces */
+.demo-card {
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  background: var(--ink-1);
+  box-shadow:
+    0 30px 80px -30px rgba(0, 0, 0, 0.7),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  overflow: hidden;
+  position: relative;
+}
+.demo-subcard {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+/* Workflow flow track */
+.demo-flow-track {
+  position: relative;
+  height: 1px;
+  background: var(--line-2);
+  overflow: hidden;
+}
+.demo-flow-track::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  transform: translateY(-50%);
+  box-shadow: 0 0 8px var(--accent);
+  animation: demo-flow 2.2s linear infinite;
+}
+.demo-flow-track.t2::after { animation-delay: 0.7s; }
+.demo-flow-track.t3::after { animation-delay: 1.4s; }
+.demo-flow-track.done::after {
+  display: none;
+}
+.demo-flow-track.done {
+  background: rgba(166, 200, 242, 0.55);
+}
+
+.demo-shimmer-track {
+  position: relative;
+  overflow: hidden;
+  background: var(--line);
+}
+.demo-shimmer-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(166, 200, 242, 0.45), transparent);
+  animation: demo-shimmer 1.8s ease-in-out infinite;
+}
+
+/* Native select styling within the dark shell */
+.demo-shell select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 26px;
 }

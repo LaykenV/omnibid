@@ -12,21 +12,19 @@ The demo page should help the recording say:
 
 ## Route
 
-Recommended route:
+Use the demo URL:
 
 ```txt
 /demo/rfp-agent
 ```
 
-Keep it outside the normal authenticated proposal navigation if possible. The Loom should not show the current app shell, proposal list, account UI, login UI, or product claims from the older OmniBid marketing page.
+Implementation detail: the route file lives under the authenticated route tree at `src/routes/_authed/demo/rfp-agent.tsx`, but TanStack exposes the browser path as `/demo/rfp-agent`.
 
-If the current auth/data model makes a public route expensive, use an authenticated route temporarily:
+Reasoning: `api.proposals.get` and `api.requirements.listByProposal` both call `requireIdentity` and throw on unauthenticated callers. Building public-facing equivalents costs ~half a day of backend work that the Loom does not need. Sign in once before recording, then open `/demo/rfp-agent`.
 
-```txt
-/_authed/demo/rfp-agent
-```
+Hide all navigation chrome on this route. The Loom must not show the existing app shell, proposal list, account UI, login UI, or product claims from the older OmniBid marketing page. The demo canvas is the only thing on screen.
 
-In that case, hide navigation chrome on this route and record only the demo canvas.
+Revisit a public `/demo/rfp-agent` route only if the Varholdt AI marketing page later wants a clickable, self-serve "watch it run" surface.
 
 ## Experience Shape
 
@@ -95,6 +93,7 @@ Results should prioritize scanability:
 - Agency
 - Solicitation number
 - A table grouped by category
+- A destination chip near the matrix header reading **"Lands in: Excel · Word · SharePoint"**. Non-functional badge. Its job is to visually close the "lives in your tools" story so the proof moment does not end inside the app shell. Do not wire export to it; it is a label.
 
 Suggested table columns:
 
@@ -121,31 +120,30 @@ For the Loom, status controls can be dropdowns or segmented pills. The key is th
 
 Add a citation-friendly interaction for the recording.
 
-Minimum version:
+Before building, confirm what the data layer actually stores on each requirement. Grep `convex/requirements.ts`, `convex/rawExtractions.ts`, and `convex/schema.ts` for the citation fields. The drawer's contents must match what is actually persisted.
 
-- Source reference appears as a clickable-looking pill, even if it does not jump into a PDF viewer yet.
-- Clicking or hovering a source pill opens a side panel with:
-  - Requirement text
-  - Source reference
-  - "Reviewer verifies against source document before approval"
+- If only a section/page reference is stored (e.g. "Section L.3.2(a), page 14"), design the drawer around just that.
+- If a verbatim source excerpt is stored, include it as a quoted block.
+- Do not render an "Excerpt" section that resolves empty or fakes content. The reference alone is sufficient traceability proof.
 
-Best version:
+Drawer contents (use only what exists):
 
-- Source pill opens a right-side citation drawer.
-- Drawer shows source metadata, section reference, and a placeholder/source excerpt if available.
+- Requirement text
+- Source reference (section, page)
+- Source excerpt, only if persisted
+- "Reviewer verifies against source document before approval"
 
 Do not fake a PDF jump unless it actually works.
 
 ### Beat 5 — Pattern Transfer
 
-Add a small, non-dominant side panel or footer strip:
+Add a small, non-dominant side panel or footer strip. Keep this list to **three** items so it matches the Loom script cadence (the script names three segments verbally — four items on screen while three are named reads as a sync mismatch):
 
 ```txt
 Same pattern, different documents
 Resume screening
 Claims prep
 Client source-doc intake
-Internal knowledge search
 ```
 
 This gives the Loom a visual anchor for the "pattern, not product" section without turning the video into a portfolio tour.
@@ -205,26 +203,21 @@ Reuse existing pieces where practical:
 - Data queries from `src/routes/_authed/proposals/-proposalDetail.tsx`
 - `api.proposals.get`
 - `api.requirements.listByProposal`
-- Existing CSV export logic if export is shown
 - Existing category labels/order, but rename for buyer clarity where useful
+
+**Do not wire CSV/Excel export on this page.** Export is forbidden in the Loom (see `loom.md` recording rules). The destination chip in Beat 3 is a label, not a control.
 
 Build a dedicated presentation component instead of trying to stretch the current proposal detail page. The existing page is fine for operator use, but the Loom needs fewer distractions and a clearer story.
 
-Suggested files:
-
-```txt
-src/routes/demo/rfp-agent.tsx
-src/routes/demo/-rfpAgentDemo.tsx
-src/routes/demo/-demoData.ts
-```
-
-If auth is required:
+Files:
 
 ```txt
 src/routes/_authed/demo/rfp-agent.tsx
 src/routes/_authed/demo/-rfpAgentDemo.tsx
 src/routes/_authed/demo/-demoData.ts
 ```
+
+In `-demoData.ts`, pin the chosen SAM.gov solicitation as a named constant with a comment recording why it was picked (clean parse, good requirement count, no CUI, public). Future re-records will need this — present-you knows which RFP held up under the parser; six-months-from-now-you will not.
 
 ## Visual Direction
 
@@ -334,4 +327,5 @@ The demo page is ready when:
 - At least one source/citation interaction is easy to show.
 - The page contains no SaaS-buying CTA.
 - The page visually supports the Varholdt AI offer: human-reviewed document workflow agents.
-
+- The full demo can be performed in one continuous take after sign-in, without showing auth, reloading the page, or switching context.
+- No element on the page acts like an Excel/PDF export, confidence scoring control, or any feature not visually present and working. The "Excel · Word · SharePoint" destination chip is allowed as a non-functional label.
